@@ -1,0 +1,7 @@
+.hud { position: absolute; top: 16px; left: 16px; width: 360px; padding: 16px; background-color: rgba(11, 19, 32, 0.86); border-radius: 8px; color: #ffffff; }
+.role { font-size: 30px; color: #73e5ef; height: 40px; }
+.progress { font-size: 27px; height: 36px; }
+.stage { font-size: 20px; height: 32px; color: #73e5ef; }
+.circuits { font-size: 24px; height: 34px; color: #f8d883; }
+.ship { font-size: 22px; height: 32px; color: #73e5ef; }
+

@@ -1,0 +1,19 @@
+Engineer_Tool :: class : Ability_Base {
+    on_init :: method() { name = "Repair"; }
+    can_use :: method() -> bool {
+        for station: component_iterator(Ship_Station) {
+            if (station.station_kind < 4 || (station.station_kind >= 8 && station.station_kind <= 11)) && station.can_use(player) && length(station.entity.world_position.xy - player.entity.world_position.xy) < 1.5 { return true; }
+        }
+        return false;
+    }
+    on_update :: method(params: ref Ability_Update_Params) {
+        if !params.clicked || !params.can_use { return; }
+        for station: component_iterator(Ship_Station) {
+            if (station.station_kind < 4 || (station.station_kind >= 8 && station.station_kind <= 11)) && station.can_use(player) && length(station.entity.world_position.xy - player.entity.world_position.xy) < 1.5 {
+                current_cooldown = player.tool_cooldown(20);
+                station.on_interact(player);
+                return;
+            }
+        }
+    }
+}

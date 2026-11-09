@@ -1,0 +1,4 @@
+Ship_Boost :: class : Effect_Base {
+    effect_start :: method() { player.agent.movement_speed += 80; }
+    effect_end :: method(interrupt: bool) { if #alive(player) { player.refresh_speed(); } }
+}

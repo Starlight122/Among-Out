@@ -1,0 +1,10 @@
+{
+    csl: true
+    projects:
+    [
+        {
+            name: "Among Out Session"
+            id: "6a6ddd77a8f39eab96e15d7a"
+        }
+    ]
+}

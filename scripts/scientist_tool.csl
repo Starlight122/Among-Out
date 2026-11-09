@@ -1,0 +1,17 @@
+Scientist_Tool :: class : Ability_Base {
+    on_init :: method() { name = "Sample"; }
+    can_use :: method() -> bool { return !has_effect(player.entity, Ship_Sample); }
+    on_update :: method(params: ref Ability_Update_Params) {
+        if params.clicked && params.can_use {
+            current_cooldown = player.tool_cooldown(35);
+            effect := new(Ship_Sample);
+            effect.set_duration(30);
+            add_passive_effect(player.entity, effect);
+            desc := SFX.default_sfx_desc();
+            desc.entity_to_follow = player.entity.id;
+            desc.specific_to_player = player;
+            desc.volume = 0.3;
+            SFX.play(get_asset(SFX_Asset, "evidence_machine_activation_complete_0693c6.wav"), desc);
+        }
+    }
+}

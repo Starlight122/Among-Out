@@ -1,0 +1,121 @@
+import "core:ao"
+
+task_pulse_count :: proc(role: int, step: int) -> int {
+    task := (role + step) % 8;
+    if task == 3 { return 3; }
+    if task == 1 || task == 4 || task == 6 { return 2; }
+    return 1;
+}
+
+Player :: class : Player_Base {
+    // Personal progress is independent for every crew member.
+    role: int = 0;
+    task_step: int = 0;
+    task_stage: int = 0;
+    repairs: int = 0;
+    circuits: int = 0;
+    parts: int = 0;
+    boot_level: int = 0;
+    kit_level: int = 0;
+    cell_level: int = 0;
+    reward_time: float;
+    reward_amount: int;
+    arrow_interp: Position_Interpolation_Helper;
+
+    ao_start :: method() {
+        data: Crew_Save;
+        if Save.try_get_json(this, "crew_v1", ref data) {
+            role = clamp(data.role, 0, 2);
+            task_step = clamp(data.task_step, 0, 7);
+            task_stage = clamp(data.task_stage, 0, task_pulse_count(role, task_step) - 1);
+            repairs = max(0, data.repairs);
+            circuits = max(0, data.circuits);
+            parts = max(0, data.parts);
+            boot_level = clamp(data.boot_level, 0, 3);
+            kit_level = clamp(data.kit_level, 0, 3);
+            cell_level = clamp(data.cell_level, 0, 3);
+        }
+        refresh_speed();
+        for nav: component_iterator(Navmesh) { agent.set_navmesh_to_lock_to(nav); }
+    }
+
+    save_progress :: method() {
+        data := Crew_Save{role=role, task_step=task_step, task_stage=task_stage, repairs=repairs, circuits=circuits, parts=parts, boot_level=boot_level, kit_level=kit_level, cell_level=cell_level};
+        Save.set_json(this, "crew_v1", ref data);
+    }
+
+    tool_cooldown :: method(base_seconds: float) -> float {
+        return base_seconds * (1.0 - 0.1 * cell_level.(float));
+    }
+
+    refresh_speed :: method() {
+        agent.movement_speed = 300.0 + boot_level.(float) * 20.0;
+        if role == 1 { agent.movement_speed += 40; }
+        if has_effect(entity, Ship_Boost) { agent.movement_speed += 80; }
+    }
+
+    ao_late_update :: method(dt: float) {
+        if !is_local_or_server() return;
+        draw_ability_button(this, Recall_Ability, 0);
+        if role == 0 { draw_ability_button(this, Engineer_Tool, 1); }
+        if role == 1 { draw_ability_button(this, Navigator_Tool, 1); }
+        if role == 2 { draw_ability_button(this, Scientist_Tool, 1); }
+        UI.uidoc_clear_bindings();
+        role_name := "Engineer";
+        if role == 1 { role_name = "Navigator"; }
+        if role == 2 { role_name = "Scientist"; }
+        UI.uidoc_bind_text("role", role_name);
+        UI.uidoc_bind_text("progress", `Tasks: {task_step} / 8`);
+        stage_text := "";
+        if task_stage > 0 {
+            total_pulses := task_pulse_count(role, task_step);
+            stage_text = `Pulses: {task_stage} / {total_pulses}`;
+        }
+        if has_effect(entity, Ship_Sample) { stage_text += "  Sample ready"; }
+        UI.uidoc_bind_text("stage", stage_text);
+        UI.uidoc_bind_text("circuits", `Circuits: {circuits}  |  Parts: {parts}`);
+        ship_text := "";
+        for reactor: component_iterator(Ship_Reactor) {
+            ship_text = `Ship: {reactor.progress} / 16  |  Cycles: {reactor.cycles}`;
+        }
+        UI.uidoc_bind_text("ship", ship_text);
+        UI.uidoc(get_asset(UIDoc_Asset, "UI/crew.uidoc"));
+        age := get_time() - reward_time;
+        if reward_amount > 0 && age >= 0 && age < 1.0 {
+            UI.push_world_draw_context();
+            defer UI.pop_draw_context();
+            rise := age * 0.6;
+            previous_rise := max(0.0, age - get_fixed_delta_time()) * 0.6;
+            UI.push_interpolation_offset(v2{0, rise - previous_rise});
+            defer UI.pop_interpolation_offset();
+            ts := UI.default_text_settings();
+            ts.size = 0.4;
+            ts.color = {1, 0.85, 0.3, 1.0 - age};
+            pos := entity.world_position.xy + v2{0, 1.3 + rise};
+            UI.text(Rect{pos, pos}.grow(1.0), ts, `+{reward_amount} parts`);
+        }
+        target := (task_step + role) % 8;
+        station_kind := target;
+        if target >= 4 { station_kind = target + 4; }
+        for station: component_iterator(Ship_Station) {
+            if station.station_kind == station_kind {
+                for nav: component_iterator(Navmesh) {
+                    path, ok := nav.request_pathfind(entity.world_position.xy, station.entity.world_position.xy, entity.id, 0.4);
+                    if ok && path.count >= 2 {
+                        waypoint := path[1];
+                        offset := arrow_interp.update(waypoint);
+                        options := Tutorial_Arrow.default_options();
+                        Tutorial_Arrow.draw(this, waypoint, options, offset);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+
+

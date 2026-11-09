@@ -1,0 +1,14 @@
+Ship_Reactor :: class : Component {
+    progress: int = 0;
+    cycles: int = 0;
+
+    complete_repair :: method() -> bool {
+        progress += 1;
+        if progress >= 16 {
+            progress = 0;
+            cycles += 1;
+            return true;
+        }
+        return false;
+    }
+}

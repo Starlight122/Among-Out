@@ -1,0 +1,12 @@
+Crew_Save :: struct {
+    @ao_serialize role: int;
+    @ao_serialize task_step: int;
+    @ao_serialize task_stage: int;
+    @ao_serialize repairs: int;
+    @ao_serialize circuits: int;
+    @ao_serialize parts: int;
+    @ao_serialize boot_level: int;
+    @ao_serialize kit_level: int;
+    @ao_serialize cell_level: int;
+}
+

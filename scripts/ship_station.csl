@@ -1,0 +1,152 @@
+Ship_Station :: class : Interactable {
+    // 0..3 and 8..11 are consoles; 4..6 select a specialty; 7 upgrades boots.
+    @ao_serialize station_kind: int = 0;
+
+    ao_start :: method() {
+        this.set_listener(this);
+        radius = 1.5;
+        required_hold_time = 0.7;
+        if station_kind == 13 { this.set_text("Upgrade power cell"); this.set_subtitle("Faster recharge: 20 / 40 / 60 parts"); required_hold_time = 0; }
+        if station_kind == 12 { this.set_text("Upgrade kit"); this.set_subtitle("More parts: 15 / 30 / 45 parts"); required_hold_time = 0; }
+        if station_kind == 8 { this.set_text("Clear communications"); this.set_subtitle("2 pulses"); required_hold_time = 0.3; }
+        if station_kind == 9 { this.set_text("Balance oxygen"); required_hold_time = 1.2; }
+        if station_kind == 10 { this.set_text("Check medbay"); this.set_subtitle("2 pulses"); required_hold_time = 0.3; }
+        if station_kind == 11 { this.set_text("Review security"); required_hold_time = 0.9; }
+        if station_kind == 0 { this.set_text("Restore power"); required_hold_time = 1.2; }
+        if station_kind == 1 { this.set_text("Align navigation"); this.set_subtitle("2 pulses"); required_hold_time = 0.3; }
+        if station_kind == 2 { this.set_text("Scan systems"); required_hold_time = 1.5; }
+        if station_kind == 3 { this.set_text("Calibrate engines"); this.set_subtitle("3 pulses"); required_hold_time = 0.3; }
+        if station_kind == 4 { this.set_text("Engineer"); this.set_subtitle("Bonus parts at power"); required_hold_time = 0; }
+        if station_kind == 5 { this.set_text("Navigator"); this.set_subtitle("Moves faster"); required_hold_time = 0; }
+        if station_kind == 6 { this.set_text("Scientist"); this.set_subtitle("Bonus parts at systems"); required_hold_time = 0; }
+        if station_kind == 7 { this.set_text("Upgrade boots"); this.set_subtitle("More speed: 6 / 12 / 18 parts"); required_hold_time = 0; }
+    }
+
+    can_use :: method(player: Player) -> bool {
+        // Interactable proximity alone ignores walls. Require an unobstructed
+        // short navmesh route before accepting a console interaction.
+        from := player.entity.world_position.xy;
+        to := entity.world_position.xy;
+        direct := length(to - from);
+        if direct > radius { return false; }
+        if direct > 0.1 {
+            for nav: component_iterator(Navmesh) {
+                route, ok := nav.find_path(from, to, 0);
+                if !ok || route.count < 2 { return false; }
+                distance: float = 0;
+                for i: 1..<route.count { distance += length(route[i] - route[i - 1]); }
+                if distance > direct + 0.12 { return false; }
+            }
+        }
+        if station_kind == 13 { return player.cell_level < 3 && player.parts >= (player.cell_level + 1) * 20; }
+        if station_kind == 12 { return player.kit_level < 3 && player.parts >= (player.kit_level + 1) * 15; }
+        if station_kind == 7 { return player.boot_level < 3 && player.parts >= (player.boot_level + 1) * 6; }
+        if station_kind >= 4 && station_kind <= 6 return player.role != station_kind - 4;
+        task_index := station_kind;
+        if station_kind >= 8 { task_index = station_kind - 4; }
+        return task_index == (player.task_step + player.role) % 8;
+    }
+
+    on_interact :: method(player: Player) {
+        if station_kind == 13 {
+            player.parts -= (player.cell_level + 1) * 20;
+            player.cell_level += 1;
+        } else if station_kind == 12 {
+            player.parts -= (player.kit_level + 1) * 15;
+            player.kit_level += 1;
+        } else if station_kind == 7 {
+            player.parts -= (player.boot_level + 1) * 6;
+            player.boot_level += 1;
+            player.refresh_speed();
+        } else if station_kind >= 4 && station_kind <= 6 {
+            remove_effect(player.entity, Ship_Boost, true);
+            remove_effect(player.entity, Ship_Sample, true);
+            player.role = station_kind - 4;
+            player.task_stage = 0;
+            player.refresh_speed();
+        } else {
+            pulses := task_pulse_count(player.role, player.task_step);
+            player.task_stage += 1;
+            if player.task_stage < pulses {
+                player.save_progress();
+                desc := SFX.default_sfx_desc();
+                desc.entity_to_follow = entity.id;
+                desc.specific_to_player = player;
+                desc.volume = 0.25;
+                SFX.play(get_asset(SFX_Asset, "evidence_machine_activation_complete_0693c6.wav"), desc);
+                return;
+            }
+            player.task_stage = 0;
+            player.task_step += 1;
+            player.repairs += 1;
+            earned := 1 + player.kit_level;
+            if player.role == 0 && station_kind == 0 { earned += 1; }
+            if player.role == 2 && station_kind == 2 { earned += 1; }
+            if has_effect(player.entity, Ship_Sample) {
+                earned *= 2;
+                remove_effect(player.entity, Ship_Sample, false);
+            }
+            for reactor: component_iterator(Ship_Reactor) {
+                if reactor.complete_repair() {
+                    // The finishing player receives the bonus with their task reward;
+                    // other connected crew receive their own persistent share.
+                    earned += 5;
+                    for crew: component_iterator(Player) {
+                        if crew.get_user_id() != player.get_user_id() {
+                            crew.parts += 5;
+                            crew.reward_amount = 5;
+                            crew.reward_time = get_time();
+                            crew.save_progress();
+                            team_sound := SFX.default_sfx_desc();
+                            team_sound.entity_to_follow = crew.entity.id;
+                            team_sound.specific_to_player = crew;
+                            team_sound.volume = 0.4;
+                            SFX.play(get_asset(SFX_Asset, "evidence_machine_activation_complete_0693c6.wav"), team_sound);
+                        }
+                    }
+                }
+            }
+            player.parts += earned;
+            player.reward_amount = earned;
+            player.reward_time = get_time();
+            if player.task_step >= 8 {
+                player.task_step = 0;
+                player.circuits += 1;
+            }
+        }
+        player.save_progress();
+        desc := SFX.default_sfx_desc();
+        desc.entity_to_follow = entity.id;
+        desc.specific_to_player = player;
+        desc.volume = 0.4;
+        SFX.play(get_asset(SFX_Asset, "evidence_machine_activation_complete_0693c6.wav"), desc);
+    }
+
+    ao_draw :: method(dt: float) {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+        ts := UI.default_text_settings();
+        ts.size = 0.34;
+        p := entity.world_position.xy + v2{0, 1.0};
+        label := "";
+        if station_kind == 0 label = "POWER";
+        if station_kind == 1 label = "NAVIGATION";
+        if station_kind == 2 label = "SYSTEMS";
+        if station_kind == 3 label = "ENGINES";
+        if station_kind == 4 label = "ENGINEER";
+        if station_kind == 5 label = "NAVIGATOR";
+        if station_kind == 6 label = "SCIENTIST";
+        if station_kind == 7 label = "BOOTS";
+        if station_kind == 12 label = "REPAIR KIT";
+        if station_kind == 13 label = "POWER CELL";
+        if station_kind == 8 label = "COMMS";
+        if station_kind == 9 label = "OXYGEN";
+        if station_kind == 10 label = "MEDBAY";
+        if station_kind == 11 label = "SECURITY";
+        UI.text(Rect{p, p}.grow(1.3), ts, label);
+    }
+}
+
+
+
+

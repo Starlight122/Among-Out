@@ -1,0 +1,180 @@
+test_ship_tasks :: proc() {
+    Test.spawn_dummy_players(1);
+    Test.teleport({-12, 4});
+    Test.assert_can_interact("power is first", "Power");
+    Test.interact_with("Power");
+    Test.assert_component_int("power completed", "", "Player.task_step", 1);
+    Test.assert_component_int("engineer power bonus", "", "Player.parts", 2);
+    Test.teleport({9, 4});
+    Test.interact_with("Navigation");
+    Test.assert_component_int("first navigation pulse", "", "Player.task_stage", 1);
+    Test.assert_component_int("pulse not a completion", "", "Player.task_step", 1);
+    Test.interact_with("Navigation");
+    Test.assert_component_int("navigation completed", "", "Player.task_step", 2);
+    Test.teleport({9, -5}); Test.interact_with("Systems");
+    Test.teleport({-12, -5}); Test.interact_with("Engines"); Test.interact_with("Engines");
+    Test.assert_component_int("two engine pulses", "", "Player.task_stage", 2);
+    Test.interact_with("Engines");
+    Test.teleport({-6, 4}); Test.interact_with("Comms"); Test.interact_with("Comms");
+    Test.teleport({4, 5}); Test.interact_with("Oxygen");
+    Test.teleport({3, -6}); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+    Test.teleport({-7, -5}); Test.interact_with("Security");
+    Test.assert_component_int("full circuit", "", "Player.circuits", 1);
+    Test.assert_component_int("eight repairs", "", "Player.repairs", 8);
+    Test.assert_component_int("circuit resets", "", "Player.task_step", 0);
+    Test.teleport({0, -2}); Test.interact_with("Boot Upgrade");
+    Test.assert_component_int("boot upgrade", "", "Player.boot_level", 1);
+    Test.assert_component_int("cost deducted", "", "Player.parts", 3);
+}
+
+test_role_and_return :: proc() {
+    Test.teleport({-12, 4}); Test.interact_with("Power");
+    Test.teleport({0, 2}); Test.interact_with("Navigator");
+    Test.assert_component_int("navigator selected", "", "Player.role", 1);
+    Test.assert_component_int("role swap preserves task progress", "", "Player.task_step", 1);
+    Test.assert_component_float("navigator speed", "", "Player.agent.movement_speed", 340);
+    Test.teleport({8, 4}); Test.use_ability(0);
+    Test.assert_player_near("return to bridge", {0, 0}, 0.5);
+    Test.assert_ability_unavailable("return cooldown", 0);
+}
+
+test_specialty_tools :: proc() {
+    Test.teleport({-12, 4});
+    Test.assert_ability_available("repair available at target", 1);
+    Test.use_ability(1);
+    Test.assert_component_int("repair tool completes power", "", "Player.task_step", 1);
+    Test.teleport({0, 2}); Test.interact_with("Navigator");
+    Test.use_ability(1);
+    Test.assert_component_float("boost speed", "", "Player.agent.movement_speed", 420);
+    Test.wait_seconds(4.5);
+    Test.assert_component_float("boost expires", "", "Player.agent.movement_speed", 340);
+    Test.teleport({3, 0}); Test.interact_with("Scientist");
+    Test.use_ability(1);
+    Test.teleport({-12, -5}); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+    Test.assert_component_int("sample doubles engine parts", "", "Player.parts", 4);
+}
+
+test_switch_clears_boost :: proc() {
+    Test.teleport({0, 2}); Test.interact_with("Navigator");
+    Test.use_ability(1);
+    Test.assert_component_float("boost active", "", "Player.agent.movement_speed", 420);
+    Test.teleport({3, 0}); Test.interact_with("Scientist");
+    Test.assert_component_float("switch removes boost", "", "Player.agent.movement_speed", 300);
+    Test.wait_seconds(4.5);
+    Test.assert_component_float("no delayed speed change", "", "Player.agent.movement_speed", 300);
+}
+
+test_walkable_ship :: proc() {
+    Test.pathfind_to({-12, 4}, tolerance=1.0); Test.interact_with("Power");
+    Test.pathfind_to({9, 4}, tolerance=1.0); Test.interact_with("Navigation"); Test.interact_with("Navigation");
+    Test.pathfind_to({9, -5}, tolerance=1.0); Test.interact_with("Systems");
+    Test.pathfind_to({-12, -5}, tolerance=1.0); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+    Test.pathfind_to({-6, 4}, tolerance=1.0); Test.interact_with("Comms"); Test.interact_with("Comms");
+    Test.pathfind_to({4, 5}, tolerance=1.0); Test.interact_with("Oxygen");
+    Test.pathfind_to({3, -6}, tolerance=1.0); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+    Test.pathfind_to({-7, -5}, tolerance=1.0); Test.interact_with("Security");
+    Test.assert_component_int("walked complete circuit", "", "Player.circuits", 1);
+    Test.pathfind_to({0, -2}, tolerance=1.0); Test.interact_with("Boot Upgrade");
+    Test.assert_component_int("walked to upgrade", "", "Player.boot_level", 1);
+}
+
+test_four_crew_reactor :: proc() {
+    Test.spawn_dummy_players(3);
+    Test.assert_entity_count("four connected crew", "Player", 4);
+    for lap: 0..<2 {
+        Test.teleport({-12, 4}); Test.interact_with("Power");
+        Test.teleport({9, 4}); Test.interact_with("Navigation"); Test.interact_with("Navigation");
+        Test.teleport({9, -5}); Test.interact_with("Systems");
+        Test.teleport({-12, -5}); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+        Test.teleport({-6, 4}); Test.interact_with("Comms"); Test.interact_with("Comms");
+        Test.teleport({4, 5}); Test.interact_with("Oxygen");
+        Test.teleport({3, -6}); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+        Test.teleport({-7, -5}); Test.interact_with("Security");
+    }
+    Test.assert_component_int("reactor cycles", "Ship Reactor", "Ship_Reactor.cycles", 1);
+    Test.assert_component_int("reactor resets", "Ship Reactor", "Ship_Reactor.progress", 0);
+    Test.assert_component_int("milestone bonus", "", "Player.parts", 23);
+    Test.assert_component_int("personal circuits", "", "Player.circuits", 2);
+    Test.assert_component_int("first crewmate shares reward", "Editor_1000", "Player.parts", 5);
+    Test.assert_component_int("second crewmate shares reward", "Editor_1001", "Player.parts", 5);
+    Test.assert_component_int("third crewmate shares reward", "Editor_1002", "Player.parts", 5);
+    Test.teleport({-12, 4}); Test.interact_with("Power");
+    Test.assert_component_int("next cycle starts", "Ship Reactor", "Ship_Reactor.progress", 1);
+    Test.assert_component_int("no duplicate team reward", "Editor_1000", "Player.parts", 5);
+    Test.teleport({-3, -2}); Test.interact_with("Cell Upgrade");
+    Test.assert_component_int("power cell purchased", "", "Player.cell_level", 1);
+    Test.assert_component_int("cell cost deducted", "", "Player.parts", 5);
+    Test.use_ability(0);
+    Test.assert_ability_unavailable("upgraded return cooling", 0);
+}
+
+test_pulse_role_change :: proc() {
+    Test.teleport({-12, 4}); Test.interact_with("Power");
+    Test.teleport({9, 4}); Test.interact_with("Navigation");
+    Test.assert_component_int("pulse began", "", "Player.task_stage", 1);
+    Test.teleport({3, 0}); Test.interact_with("Scientist");
+    Test.assert_component_int("partial pulse reset when task changes", "", "Player.task_stage", 0);
+    Test.assert_component_int("circuit progress preserved", "", "Player.task_step", 1);
+    Test.teleport({-12, -5});
+    Test.interact_with("Engines");
+    Test.assert_component_int("new task starts at first pulse", "", "Player.task_stage", 1);
+    Test.assert_component_int("no premature reward", "", "Player.parts", 2);
+}
+
+test_late_crew_reward :: proc() {
+    for lap: 0..<2 {
+        Test.teleport({-12, 4}); Test.interact_with("Power");
+        Test.teleport({9, 4}); Test.interact_with("Navigation"); Test.interact_with("Navigation");
+        Test.teleport({9, -5}); Test.interact_with("Systems");
+        Test.teleport({-12, -5}); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+        Test.teleport({-6, 4}); Test.interact_with("Comms"); Test.interact_with("Comms");
+        Test.teleport({4, 5}); Test.interact_with("Oxygen");
+        Test.teleport({3, -6}); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+        if lap == 0 { Test.teleport({-7, -5}); Test.interact_with("Security"); }
+    }
+    Test.assert_component_int("ship almost repaired", "Ship Reactor", "Ship_Reactor.progress", 15);
+    Test.spawn_dummy_players(3);
+    Test.assert_component_int("late crew starts fresh", "Editor_1000", "Player.task_step", 0);
+    Test.teleport({-7, -5}); Test.interact_with("Security");
+    Test.assert_component_int("late crew earns share", "Editor_1000", "Player.parts", 5);
+    Test.assert_component_int("late crew keeps own progress", "Editor_1000", "Player.task_step", 0);
+    Test.assert_component_int("reactor completed", "Ship Reactor", "Ship_Reactor.cycles", 1);
+}
+
+test_scientist_walkable_route :: proc() {
+    Test.pathfind_to({3, 0}, tolerance=1.0); Test.interact_with("Scientist");
+    Test.assert_component_int("scientist selected", "", "Player.role", 2);
+    Test.pathfind_to({9, -5}, tolerance=1.0); Test.interact_with("Systems");
+    Test.pathfind_to({-12, -5}, tolerance=1.0); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+    Test.pathfind_to({-6, 4}, tolerance=1.0); Test.interact_with("Comms"); Test.interact_with("Comms");
+    Test.pathfind_to({4, 5}, tolerance=1.0); Test.interact_with("Oxygen");
+    Test.pathfind_to({3, -6}, tolerance=1.0); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+    Test.pathfind_to({-7, -5}, tolerance=1.0); Test.interact_with("Security");
+    Test.pathfind_to({-12, 4}, tolerance=1.0); Test.interact_with("Power");
+    Test.pathfind_to({9, 4}, tolerance=1.0); Test.interact_with("Navigation"); Test.interact_with("Navigation");
+    Test.assert_component_int("scientist circuit", "", "Player.circuits", 1);
+    Test.assert_component_int("scientist bonus", "", "Player.parts", 9);
+}
+
+test_navigator_walkable_route :: proc() {
+    Test.pathfind_to({0, 2}, tolerance=1.0); Test.interact_with("Navigator");
+    Test.assert_component_int("navigator selected", "", "Player.role", 1);
+    Test.pathfind_to({9, 4}, tolerance=1.0); Test.interact_with("Navigation"); Test.interact_with("Navigation");
+    Test.pathfind_to({9, -5}, tolerance=1.0); Test.interact_with("Systems");
+    Test.pathfind_to({-12, -5}, tolerance=1.0); Test.interact_with("Engines"); Test.interact_with("Engines"); Test.interact_with("Engines");
+    Test.pathfind_to({-6, 4}, tolerance=1.0); Test.interact_with("Comms"); Test.interact_with("Comms");
+    Test.pathfind_to({4, 5}, tolerance=1.0); Test.interact_with("Oxygen");
+    Test.pathfind_to({3, -6}, tolerance=1.0); Test.interact_with("Medbay"); Test.interact_with("Medbay");
+    Test.pathfind_to({-7, -5}, tolerance=1.0); Test.interact_with("Security");
+    Test.pathfind_to({-12, 4}, tolerance=1.0); Test.interact_with("Power");
+    Test.assert_component_int("navigator circuit", "", "Player.circuits", 1);
+}
+
+test_wall_blocks_console :: proc() {
+    Test.teleport({0, 0.7});
+    Test.assert_cannot_interact("bridge wall blocks role selector", "Navigator");
+    Test.pathfind_to({0, 2}, tolerance=0.6);
+    Test.assert_can_interact("selector reachable on same side", "Navigator");
+    Test.interact_with("Navigator");
+    Test.assert_component_int("role selection still works", "", "Player.role", 1);
+}
